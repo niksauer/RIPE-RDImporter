@@ -1,3 +1,4 @@
+import linecache
 import netaddr
 import ipcalc
 
@@ -140,7 +141,7 @@ def evaluate_ripe_inetnum_object(inetnum_object):
             inetnum_value = "NULL"
         else:
             if inetnum_key is "inetnum":
-                inetnum_value = convert_to_cidr_block(inetnum_value)
+                inetnum_value = inetnum_value + "," + convert_to_cidr_block(inetnum_value)
                 # TAKES LONG ??
                 # route_info = get_ripe_route_info(str(ipcalc.IP(inetnum_value)))
                 #
@@ -227,7 +228,8 @@ def get_ripe_route_info(ip):
 
 # IMPORT
 # None -> None
-# writes (country, org, inetnum, descr, netname) to CSV file
+# writes (country, org, inetnum, descr, netname, org_type, org_name, asn, as_descr) to CSV file
+# TODO: store multiple line values
 def import_ripe_registry_data():
     line_count = 0
     object_count = -1
@@ -238,7 +240,7 @@ def import_ripe_registry_data():
     with open("output/ripe_registry.txt", "w") as dest_fp:
         with open('RIPE Data/ripe.db.inetnum') as src_fp:
             for line in src_fp:
-                if line_count > 200:
+                if line_count > 500:
                     break
 
                 for target_attribute in target_ripe_inetnum_attributes:
@@ -259,12 +261,49 @@ def import_ripe_registry_data():
 
                 line_count = line_count + 1
 
-    print records, object_count
+    print records, "processed " + str(object_count) + " INETNUM entities"
+
+
+# None -> None
+def import_ripe_registry_data_in_range(record_boundaries):
+    print record_boundaries
+    line = linecache.getline('RIPE Data/ripe.db.inetnum', 10)
+    print line
+
+    # with open('RIPE Data/ripe.db.inetnum') as src_fp:
+
+    return
+
+
+# None -> [[Int]]
+def get_inetnum_record_boundaries(num_threads):
+    line_count = 0
+    current_thread = 0
+    boundaries = []
+
+    for _ in range(num_threads):
+        boundaries.append([])
+
+    with open('RIPE Data/ripe.db.inetnum') as src_fp:
+        for line in src_fp:
+            if line_count > 2000:
+                break
+
+            if line.startswith(target_ripe_inetnum_attributes[0] + ":"):
+                boundaries[current_thread].append(line_count)
+                current_thread = (current_thread + 1) % num_threads
+
+            line_count = line_count + 1
+
+    return boundaries
 
 
 # MAIN
 def main():
-    import_ripe_registry_data()
+    # import_ripe_registry_data()
+    # print get_inetnum_record_boundaries(num_threads=8)
+    import_ripe_registry_data_in_range(get_inetnum_record_boundaries(num_threads=8)[0])
+
 
 if __name__ == '__main__':
     main()

@@ -1,6 +1,9 @@
-import linecache
+from itertools import islice
+import glob
+import gevent
 import netaddr
-import ipcalc
+import shutil
+import os
 
 ripe_inetnum_attributes = (
     "inetnum",
@@ -110,6 +113,21 @@ def get_empty_ripe_inetnum_object():
     }
 
 
+# String -> Dict
+def get_ripe_inetnum_object(record):
+    temp_object = get_empty_ripe_inetnum_object()
+
+    for line in record.splitlines():
+        for target_attribute in target_ripe_inetnum_attributes:
+            target = target_attribute + ":"
+
+            if line.startswith(target):
+                attribute_value = line[len(target):].strip()
+                temp_object[target_attribute] = attribute_value
+
+    return temp_object
+
+
 # None -> Dict
 def get_empty_ripe_organisation_object():
     return {
@@ -161,7 +179,7 @@ def evaluate_ripe_inetnum_object(inetnum_object):
         temp_record = temp_record + inetnum_value + ","
 
     temp_record = temp_record + org_values + route_values
-    return temp_record[:-1]
+    return temp_record[:-1] + "\n"
 
 
 # String -> String
@@ -177,7 +195,7 @@ def get_ripe_organisation_info(org):
     object_count = -1
     temp_object = get_empty_ripe_organisation_object()
 
-    with open('RIPE Data/ripe.db.organisation', 'r') as f:
+    with open(registry_data_directory + input_file_base_name + ".organisation", 'r') as f:
         for line in f:
             if line.__contains__(org):
                 next_line = line.strip()
@@ -204,7 +222,7 @@ def get_ripe_route_info(ip):
     object_count = -1
     temp_object = get_empty_ripe_route_object()
 
-    with open('RIPE Data/ripe.db.route', 'r') as f:
+    with open(registry_data_directory + input_file_base_name + ".route", 'r') as f:
         for line in f:
             if line.__contains__(ip):
                 next_line = line.strip()
@@ -226,21 +244,26 @@ def get_ripe_route_info(ip):
                     next_line = f.next().strip()
 
 
-# IMPORT
+# [Int], Int -> [[Int], [Int], ...]
+def split_list_into_n_parts(a, n):
+    k, m = divmod(len(a), n)
+    return list(a[i * k + min(i, m):(i + 1) * k + min(i + 1, m)] for i in xrange(n))
+
+
+# NON-CONCURRENT IMPORT
 # None -> None
-# writes (country, org, inetnum, descr, netname, org_type, org_name, asn, as_descr) to CSV file
-# TODO: store multiple line values
-def import_ripe_registry_data():
+# writes (country, org, IP range, IP prefix, descr, netname, org_type, org_name, asn, as_descr) to CSV file
+# filename: "output/ripe_registry_linear.txt"
+def import_ripe_registry_data_linear():
     line_count = 0
     object_count = -1
 
-    records = ""
     temp_object = get_empty_ripe_inetnum_object()
 
-    with open("output/ripe_registry.txt", "w") as dest_fp:
-        with open('RIPE Data/ripe.db.inetnum') as src_fp:
+    with open(linear_output_file, "w") as dest_fp:
+        with open(registry_data_directory + input_file_base_name + ".inetnum") as src_fp:
             for line in src_fp:
-                if line_count > 500:
+                if line_count > lines_to_process:
                     break
 
                 for target_attribute in target_ripe_inetnum_attributes:
@@ -252,8 +275,7 @@ def import_ripe_registry_data():
 
                             if object_count >= 1:
                                 record = evaluate_ripe_inetnum_object(temp_object)
-                                records = records + record + "\n"
-                                dest_fp.write(record + "\n")
+                                dest_fp.write(record)
                                 temp_object = get_empty_ripe_inetnum_object()
 
                         attribute_value = line[len(target):].strip()
@@ -261,48 +283,88 @@ def import_ripe_registry_data():
 
                 line_count = line_count + 1
 
-    print records, "processed " + str(object_count) + " INETNUM entities"
 
-
-# None -> None
-def import_ripe_registry_data_in_range(record_boundaries):
-    print record_boundaries
-    line = linecache.getline('RIPE Data/ripe.db.inetnum', 10)
-    print line
-
-    # with open('RIPE Data/ripe.db.inetnum') as src_fp:
-
-    return
-
-
-# None -> [[Int]]
+# CONCURRENT IMPORT
+# Int -> [[Int], [Int], ...]
 def get_inetnum_record_boundaries(num_threads):
     line_count = 0
-    current_thread = 0
     boundaries = []
 
-    for _ in range(num_threads):
-        boundaries.append([])
-
-    with open('RIPE Data/ripe.db.inetnum') as src_fp:
+    with open(registry_data_directory + input_file_base_name + ".inetnum") as src_fp:
         for line in src_fp:
-            if line_count > 2000:
+            if line_count > lines_to_process:
                 break
 
             if line.startswith(target_ripe_inetnum_attributes[0] + ":"):
-                boundaries[current_thread].append(line_count)
-                current_thread = (current_thread + 1) % num_threads
+                boundaries.append(line_count)
 
             line_count = line_count + 1
 
-    return boundaries
+    return split_list_into_n_parts(boundaries, num_threads)
+
+
+# [Int], Int -> None
+# writes (country, org, IP range, IP prefix, descr, netname, org_type, org_name, asn, as_descr) to CSV file
+# filename: "output/concurrent_tmp/ripe_registry_part_X.txt"
+def import_ripe_registry_data_in_range(record_boundaries, thread_num):
+    line_count = 0
+    record_count = 0
+    filename = str(tmp_directory) + str(output_file_base_name) + "_part_" + str(thread_num) + ".txt"
+
+    with open(filename, "w") as dest_fp:
+        with open(registry_data_directory + input_file_base_name + ".inetnum") as src_fp:
+            for line in src_fp:
+                if (record_count+1) > len(record_boundaries):
+                    break
+
+                if line_count == record_boundaries[record_count]:
+                    record = line + ''.join(islice(src_fp, 10))
+                    dest_fp.write(evaluate_ripe_inetnum_object(get_ripe_inetnum_object(record)))
+                    record_count = record_count + 1
+                    line_count = line_count + 11
+                else:
+                    line_count = line_count + 1
+
+
+# None -> None
+# writes (country, org, IP range, IP prefix, descr, netname, org_type, org_name, asn, as_descr) to CSV file
+# filename: "output/ripe_registry_concurrent.txt"
+def import_ripe_registry_data_concurrent(num_threads):
+    if os.path.exists(tmp_directory):
+        shutil.rmtree(tmp_directory)
+
+    os.makedirs(tmp_directory)
+
+    record_boundaries = get_inetnum_record_boundaries(num_threads)
+
+    threads = [gevent.spawn(import_ripe_registry_data_in_range(record_boundaries[i], i))
+               for i in xrange(len(record_boundaries))]
+
+    gevent.joinall(threads)
+
+    with open(concurrent_output_file, 'wb') as dest_fp:
+        for tmp_fp in glob.glob(tmp_files):
+            if file == concurrent_output_file:
+                continue
+            with open(tmp_fp, 'rb') as src_fp:
+                shutil.copyfileobj(src_fp, dest_fp)
+
+
+output_file_base_name = "ripe_registry"
+input_file_base_name = "ripe.db"
+tmp_directory = "output/concurrent_tmp/"
+tmp_files = "output/concurrent_tmp/*.txt"
+concurrent_output_file = "output/ripe_registry_concurrent.txt"
+linear_output_file = "output/ripe_registry_linear.txt"
+linear_output = "output/ripe_registry_linear.txt"
+lines_to_process = 2000
+registry_data_directory = "RIPE Data/"
 
 
 # MAIN
 def main():
-    # import_ripe_registry_data()
-    # print get_inetnum_record_boundaries(num_threads=8)
-    import_ripe_registry_data_in_range(get_inetnum_record_boundaries(num_threads=8)[0])
+    # import_ripe_registry_data_linear()
+    import_ripe_registry_data_concurrent(4)
 
 
 if __name__ == '__main__':

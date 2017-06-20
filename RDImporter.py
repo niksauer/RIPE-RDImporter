@@ -4,6 +4,7 @@ import gevent
 import netaddr
 import shutil
 import os
+import time
 
 ripe_inetnum_attributes = (
     "inetnum",
@@ -170,9 +171,14 @@ def evaluate_ripe_inetnum_object(inetnum_object):
                 # else:
                 #     route_values = "NULL,NULL,"
             elif inetnum_key is "org":
-                for org_key, org_value in get_ripe_organisation_info(inetnum_value).iteritems():
-                    if org_key is not "organisation":
-                        org_values = org_values + '"' + str(org_value) + '"' + ","
+                org_info = get_ripe_organisation_info(inetnum_value)
+
+                if org_info is not None:
+                    for org_key, org_value in org_info.iteritems():
+                        if org_key is not "organisation":
+                            org_values = org_values + '"' + str(org_value) + '"' + ","
+                else:
+                    print inetnum_object
             elif inetnum_key is not "country":
                 inetnum_value = '"' + inetnum_value + '"'
 
@@ -190,7 +196,7 @@ def convert_to_cidr_block(ip_range):
     return str(netaddr.iprange_to_cidrs(start_ip, end_ip)[0])
 
 
-# String -> Dict
+# String -> Dict/None
 def get_ripe_organisation_info(org):
     object_count = -1
     temp_object = get_empty_ripe_organisation_object()
@@ -357,14 +363,16 @@ tmp_files = "output/concurrent_tmp/*.txt"
 concurrent_output_file = "output/ripe_registry_concurrent.txt"
 linear_output_file = "output/ripe_registry_linear.txt"
 linear_output = "output/ripe_registry_linear.txt"
-lines_to_process = 2000
+lines_to_process = 95765908
 registry_data_directory = "RIPE Data/"
 
 
 # MAIN
 def main():
+    # start_time = time.time()
     # import_ripe_registry_data_linear()
-    import_ripe_registry_data_concurrent(4)
+    # import_ripe_registry_data_concurrent(4)
+    # print("--- %s seconds ---" % (time.time() - start_time))
 
 
 if __name__ == '__main__':

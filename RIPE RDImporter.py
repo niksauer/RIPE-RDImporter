@@ -432,7 +432,7 @@ registry_data_directory = "data/"
 tmp_directory = "tmp/"
 output_directory = "output/"
 
-lines_to_process = 100000
+lines_to_process = 500000
 
 
 # MAIN

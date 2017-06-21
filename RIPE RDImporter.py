@@ -259,8 +259,6 @@ def split_list_into_n_parts(a, n):
 
 # NON-CONCURRENT IMPORT
 # None -> None
-# writes (country, org, IP range, IP prefix, descr, netname, org_type, org_name, asn, as_descr) to CSV file
-# filename: "output/ripe_registry_linear.txt"
 def import_registry_data_linear():
     line_count = 0
     object_count = -1
@@ -312,7 +310,6 @@ def get_inetnum_record_boundaries(num_threads):
 
 
 # [Int], Int -> None
-# writes (country, org, IP range, IP prefix, descr, netname, org_type, org_name, asn, as_descr) to tmp CSV file
 def import_registry_data_in_range(record_boundaries, thread_num):
     line_count = 0
     record_count = 0
@@ -336,7 +333,6 @@ def import_registry_data_in_range(record_boundaries, thread_num):
 
 
 # None -> None
-# writes (country, org, IP range, IP prefix, descr, netname, org_type, org_name, asn, as_descr) to CSV file
 def import_registry_data_with_concurrent_thread(num_threads):
     if os.path.exists(tmp_directory):
         shutil.rmtree(tmp_directory)
@@ -357,6 +353,7 @@ def import_registry_data_with_concurrent_thread(num_threads):
                 shutil.copyfileobj(src_fp, dest_fp)
 
 
+# Byte, multiprocessing.Queue -> None
 def process_record(byte_position, write_queue):
     src_filename = registry_data_directory + file_base_name_registry_data + ".inetnum"
     with open(src_filename) as src_fp:
@@ -365,6 +362,13 @@ def process_record(byte_position, write_queue):
         write_queue.put(evaluate_inetnum_object(get_inetnum_object(record)))
 
 
+def process_record_fast(record, write_queue):
+    processed_record = evaluate_inetnum_object(get_inetnum_object(record))
+    write_queue.put(processed_record)
+    return
+
+
+# multiprocessing.Queue -> None
 def listen_for_write_request(queue):
     dest_filename = output_directory + file_base_name_output_concurrent + "_process.txt"
     with open(dest_filename, "w") as dest_fp:
@@ -377,6 +381,7 @@ def listen_for_write_request(queue):
         dest_fp.close()
 
 
+# None -> None
 def import_registry_data_with_concurrent_process():
     manager = mp.Manager()
     write_queue = manager.Queue()
@@ -395,7 +400,9 @@ def import_registry_data_with_concurrent_process():
                 break
 
             if line.startswith(target_ripe_inetnum_attributes[0] + ":"):
-                jobs.append(pool.apply_async(process_record, [next_line_byte_position, write_queue]))
+                record = line + ''.join(islice(src_fp, 10))
+                # jobs.append(pool.apply_async(process_record, [next_line_byte_position, write_queue]))
+                jobs.append(pool.apply_async(process_record_fast, [record, write_queue]))
 
             next_line_byte_position = next_line_byte_position + len(line)
             line_count = line_count + 1
@@ -416,20 +423,24 @@ registry_data_directory = "data/"
 tmp_directory = "tmp/"
 output_directory = "output/"
 
-lines_to_process = 10000
+lines_to_process = 1000000
 
 
 # MAIN
 def main():
-    start_time = time.time()
-    import_registry_data_linear()
-    print("--- %s seconds ---" % (time.time() - start_time))
+    # writes (country, org, IP range, IP prefix, descr, netname, org_type, org_name, asn, as_descr) to tmp CSV file
+
+    # start_time = time.time()
+    # import_registry_data_linear()
+    # print("--- %s seconds ---" % (time.time() - start_time))
+    #
+    # start_time = time.time()
+    # import_registry_data_with_concurrent_thread(8)
+    # print("--- %s seconds ---" % (time.time() - start_time))
 
     start_time = time.time()
-    import_registry_data_with_concurrent_thread(8)
-    print("--- %s seconds ---" % (time.time() - start_time))
-
-    start_time = time.time()
+    # import_registry_data_with_concurrent_thread(8)
+    # import_registry_data_linear()
     import_registry_data_with_concurrent_process()
     print("--- %s seconds ---" % (time.time() - start_time))
 

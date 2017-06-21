@@ -5,6 +5,7 @@ import netaddr
 import shutil
 import os
 import time
+import multiprocessing as mp
 
 ripe_inetnum_attributes = (
     "inetnum",
@@ -363,7 +364,7 @@ tmp_files = "output/concurrent_tmp/*.txt"
 concurrent_output_file = "output/ripe_registry_concurrent.txt"
 linear_output_file = "output/ripe_registry_linear.txt"
 linear_output = "output/ripe_registry_linear.txt"
-lines_to_process = 95765908
+lines_to_process = 100000
 registry_data_directory = "RIPE Data/"
 
 
@@ -373,6 +374,84 @@ def main():
     # import_ripe_registry_data_linear()
     # import_ripe_registry_data_concurrent(4)
     # print("--- %s seconds ---" % (time.time() - start_time))
+
+    start_time = time.time()
+    import_ripe_registry_data_concurrent_new()
+    print("--- %s seconds ---" % (time.time() - start_time))
+
+
+def process_wrapper(lineID):
+    with open(registry_data_directory + input_file_base_name + ".inetnum") as src_fp:
+        for i, line in enumerate(src_fp):
+            if i != lineID:
+                continue
+            else:
+                print line
+                break
+
+
+def experimental1():
+    pool = mp.Pool(4)
+    jobs = []
+    line_count = 0
+
+    with open(registry_data_directory + input_file_base_name + ".inetnum") as src_fp:
+        for ID, line in enumerate(src_fp):
+            if line_count > 200:
+                for job in jobs:
+                    job.get()
+
+                pool.close()
+
+            jobs.append(pool.apply_async(process_wrapper(ID)))
+            line_count = line_count + 1
+
+    return
+
+
+def process_record(byte_position, write_queue):
+    with open(registry_data_directory + input_file_base_name + ".inetnum") as src_fp:
+        src_fp.seek(byte_position)
+        record = src_fp.readline() + ''.join(islice(src_fp, 10))
+        write_queue.put(evaluate_ripe_inetnum_object(get_ripe_inetnum_object(record)))
+
+
+def listen_for_write_request(queue):
+    with open(concurrent_output_file, "w") as dest_fp:
+        while True:
+            message = queue.get()
+            if message is "EOF":
+                break
+            dest_fp.write(str(message))
+            dest_fp.flush()
+        dest_fp.close()
+
+
+def import_ripe_registry_data_concurrent_new():
+    manager = mp.Manager()
+    write_queue = manager.Queue()
+
+    pool = mp.Pool(mp.cpu_count())
+    pool.apply_async(listen_for_write_request, [write_queue])
+
+    jobs = []
+    line_count = 0
+
+    with open(registry_data_directory + input_file_base_name + ".inetnum") as src_fp:
+        next_line_byte_position = 0
+
+        for line in src_fp:
+            if line.startswith(target_ripe_inetnum_attributes[0] + ":"):
+                jobs.append(pool.apply_async(process_record, [next_line_byte_position, write_queue]))
+
+            next_line_byte_position = next_line_byte_position + len(line)
+            line_count = line_count + 1
+
+    for job in jobs:
+        job.get()
+
+    write_queue.put("EOF")
+    pool.close()
 
 
 if __name__ == '__main__':

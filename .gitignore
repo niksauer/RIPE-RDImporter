@@ -1,4 +1,6 @@
-RIPE Data/
 .idea
-output/
 .DS_STORE
+
+data/
+output/
+tmp/

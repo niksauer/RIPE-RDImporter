@@ -161,7 +161,8 @@ def evaluate_inetnum_object(inetnum_object):
             inetnum_value = "NULL"
         else:
             if inetnum_key is "inetnum":
-                inetnum_value = inetnum_value + "," + convert_to_cidr_block(inetnum_value)
+                split_range = split_ip_range(inetnum_value)
+                inetnum_value = split_range[0] + "," + split_range[1] + "," + convert_to_cidr_block(inetnum_value)
                 # TAKES LONG ??
                 # route_info = get_ripe_route_info(str(ipcalc.IP(inetnum_value)))
                 #
@@ -195,6 +196,14 @@ def convert_to_cidr_block(ip_range):
     start_ip = ips[0].strip()
     end_ip = ips[1].strip()
     return str(netaddr.iprange_to_cidrs(start_ip, end_ip)[0])
+
+
+# String -> (String, String)
+def split_ip_range(ip_range):
+    ips = ip_range.split("-")
+    start_ip = ips[0].strip()
+    end_ip = ips[1].strip()
+    return start_ip, end_ip
 
 
 # String -> Dict/None
@@ -400,9 +409,9 @@ def import_registry_data_with_concurrent_process():
                 break
 
             if line.startswith(target_ripe_inetnum_attributes[0] + ":"):
-                record = line + ''.join(islice(src_fp, 10))
-                # jobs.append(pool.apply_async(process_record, [next_line_byte_position, write_queue]))
-                jobs.append(pool.apply_async(process_record_fast, [record, write_queue]))
+                # record = line + ''.join(islice(src_fp, 10))
+                jobs.append(pool.apply_async(process_record, [next_line_byte_position, write_queue]))
+                # jobs.append(pool.apply_async(process_record_fast, [record, write_queue]))
 
             next_line_byte_position = next_line_byte_position + len(line)
             line_count = line_count + 1
@@ -423,7 +432,7 @@ registry_data_directory = "data/"
 tmp_directory = "tmp/"
 output_directory = "output/"
 
-lines_to_process = 1000000
+lines_to_process = 100000
 
 
 # MAIN

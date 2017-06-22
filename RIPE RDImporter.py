@@ -409,8 +409,8 @@ def import_registry_data_with_concurrent_process():
                 break
 
             if line.startswith(target_ripe_inetnum_attributes[0] + ":"):
-                # record = line + ''.join(islice(src_fp, 10))
                 jobs.append(pool.apply_async(process_record, [next_line_byte_position, write_queue]))
+                # record = line + ''.join(islice(src_fp, 10))
                 # jobs.append(pool.apply_async(process_record_fast, [record, write_queue]))
 
             next_line_byte_position = next_line_byte_position + len(line)
@@ -448,8 +448,6 @@ def main():
     # print("--- %s seconds ---" % (time.time() - start_time))
 
     start_time = time.time()
-    # import_registry_data_with_concurrent_thread(8)
-    # import_registry_data_linear()
     import_registry_data_with_concurrent_process()
     print("--- %s seconds ---" % (time.time() - start_time))
 

@@ -149,7 +149,7 @@ def get_empty_route_object():
 
 
 # Dict -> String
-def evaluate_inetnum_object(inetnum_object):
+def evaluate_inetnum_object(inetnum_object, failed_lookup_write_queue):
     temp_record = ""
     org_values = ""
     route_values = ""
@@ -180,7 +180,7 @@ def evaluate_inetnum_object(inetnum_object):
                         if org_key is not "organisation":
                             org_values = org_values + '"' + str(org_value) + '"' + ","
                 else:
-                    print inetnum_object
+                    failed_lookup_write_queue.put(inetnum_object)
             elif inetnum_key is not "country":
                 inetnum_value = '"' + inetnum_value + '"'
 
@@ -363,23 +363,36 @@ def import_registry_data_with_concurrent_thread(num_threads):
 
 
 # Byte, multiprocessing.Queue -> None
-def process_record(byte_position, write_queue):
+def process_record_position(byte_position, write_queue, failed_lookup_write_queue):
     src_filename = registry_data_directory + file_base_name_registry_data + ".inetnum"
     with open(src_filename) as src_fp:
         src_fp.seek(byte_position)
         record = src_fp.readline() + ''.join(islice(src_fp, 10))
-        write_queue.put(evaluate_inetnum_object(get_inetnum_object(record)))
+        write_queue.put(evaluate_inetnum_object(get_inetnum_object(record), failed_lookup_write_queue))
 
 
-def process_record_fast(record, write_queue):
+def process_record_string(record, write_queue):
     processed_record = evaluate_inetnum_object(get_inetnum_object(record))
     write_queue.put(processed_record)
     return
 
 
 # multiprocessing.Queue -> None
-def listen_for_write_request(queue):
+def listen_for_record_write_request(queue):
     dest_filename = output_directory + file_base_name_output_concurrent + "_process.txt"
+    with open(dest_filename, "w") as dest_fp:
+        while True:
+            message = queue.get()
+            if message is "EOF":
+                break
+            dest_fp.write(str(message))
+            dest_fp.flush()
+        dest_fp.close()
+
+
+# multiprocessing.Queue -> None
+def listen_for_failed_lookup_write_request(queue):
+    dest_filename = output_directory + file_base_name_output_failed_lookup + ".txt"
     with open(dest_filename, "w") as dest_fp:
         while True:
             message = queue.get()
@@ -392,11 +405,14 @@ def listen_for_write_request(queue):
 
 # None -> None
 def import_registry_data_with_concurrent_process():
+    start_time = time.time()
     manager = mp.Manager()
     write_queue = manager.Queue()
+    failed_lookup_write_queue = manager.Queue()
 
     pool = mp.Pool(mp.cpu_count())
-    pool.apply_async(listen_for_write_request, [write_queue])
+    pool.apply_async(listen_for_record_write_request, [write_queue])
+    pool.apply_async(listen_for_failed_lookup_write_request, [failed_lookup_write_queue])
 
     jobs = []
     line_count = 0
@@ -409,9 +425,10 @@ def import_registry_data_with_concurrent_process():
                 break
 
             if line.startswith(target_ripe_inetnum_attributes[0] + ":"):
-                jobs.append(pool.apply_async(process_record, [next_line_byte_position, write_queue]))
+                jobs.append(pool.apply_async(process_record_position,
+                                             [next_line_byte_position, write_queue, failed_lookup_write_queue]))
                 # record = line + ''.join(islice(src_fp, 10))
-                # jobs.append(pool.apply_async(process_record_fast, [record, write_queue]))
+                # jobs.append(pool.apply_async(process_record_string, [record, write_queue]))
 
             next_line_byte_position = next_line_byte_position + len(line)
             line_count = line_count + 1
@@ -419,7 +436,9 @@ def import_registry_data_with_concurrent_process():
     for job in jobs:
         job.get()
 
-    write_queue.put("EOF")
+    execution_time = time.time() - start_time
+    print("--- %s seconds ---" % execution_time)
+    write_queue.put("EOF --- %s seconds ---" % execution_time)
     pool.close()
 
 
@@ -427,18 +446,17 @@ file_base_name_registry_data = "ripe.db"
 file_base_name_output_tmp = "ripe_registry"
 file_base_name_output_linear = "ripe_registry_linear"
 file_base_name_output_concurrent = "ripe_registry_concurrent"
+file_base_name_output_failed_lookup = "ripe_registry_failed_lookup"
 
 registry_data_directory = "data/"
 tmp_directory = "tmp/"
 output_directory = "output/"
 
-lines_to_process = 500000
+lines_to_process = 50000
 
 
 # MAIN
 def main():
-    # writes (country, org, IP range, IP prefix, descr, netname, org_type, org_name, asn, as_descr) to tmp CSV file
-
     # start_time = time.time()
     # import_registry_data_linear()
     # print("--- %s seconds ---" % (time.time() - start_time))
@@ -447,9 +465,8 @@ def main():
     # import_registry_data_with_concurrent_thread(8)
     # print("--- %s seconds ---" % (time.time() - start_time))
 
-    start_time = time.time()
+    # writes (country, org, start IP, end IP, IP prefix, descr, netname, org_type, org_name, asn, as_descr) to tmp CSV file
     import_registry_data_with_concurrent_process()
-    print("--- %s seconds ---" % (time.time() - start_time))
 
 
 if __name__ == '__main__':

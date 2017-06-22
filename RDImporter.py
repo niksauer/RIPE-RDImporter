@@ -410,6 +410,9 @@ def import_registry_data_with_concurrent_process():
     write_queue = manager.Queue()
     failed_lookup_write_queue = manager.Queue()
 
+    if not os.path.exists(output_directory):
+        os.makedirs(output_directory)
+
     pool = mp.Pool(mp.cpu_count())
     pool.apply_async(listen_for_record_write_request, [write_queue])
     pool.apply_async(listen_for_failed_lookup_write_request, [failed_lookup_write_queue])
@@ -452,7 +455,7 @@ registry_data_directory = "data/"
 tmp_directory = "tmp/"
 output_directory = "output/"
 
-lines_to_process = 50000
+lines_to_process = 1000
 
 
 # MAIN

@@ -1,6 +1,7 @@
 from itertools import islice
 import glob
 import gevent
+import ipcalc
 import netaddr
 import shutil
 import os
@@ -153,38 +154,38 @@ def evaluate_inetnum_object(inetnum_object, failed_lookup_write_queue):
     temp_record = ""
     org_values = ""
     route_values = ""
-
+    
     for inetnum_key, inetnum_value in inetnum_object.iteritems():
         if inetnum_value is None:
             if inetnum_key is "org":
-                org_values = "NULL,NULL,"
+                org_values = "NULL" + column_delimiter + "NULL" + column_delimiter
             inetnum_value = "NULL"
         else:
             if inetnum_key is "inetnum":
                 split_range = split_ip_range(inetnum_value)
-                inetnum_value = split_range[0] + "," + split_range[1] + "," + convert_to_cidr_block(inetnum_value)
-                # TAKES LONG ??
-                # route_info = get_ripe_route_info(str(ipcalc.IP(inetnum_value)))
-                #
-                # if route_info is not None:
-                #     for route_key, route_value in route_info.iteritems():
-                #         if route_key is not "route":
-                #             route_values = route_values + '"' + str(route_value) + '"' + ","
-                # else:
-                #     route_values = "NULL,NULL,"
+                inetnum_value = split_range[0] + column_delimiter + split_range[1] + column_delimiter + convert_to_cidr_block(inetnum_value)
+
+                route_info = get_route_info(str(ipcalc.IP(inetnum_value)))
+
+                if route_info is not None:
+                    for route_key, route_value in route_info.iteritems():
+                        if route_key is not "route":
+                            route_values = route_values + '"' + str(route_value) + '"' + column_delimiter
+                else:
+                    route_values = "NULL" + column_delimiter + "NULL" + column_delimiter
             elif inetnum_key is "org":
                 org_info = get_organisation_info(inetnum_value)
 
                 if org_info is not None:
                     for org_key, org_value in org_info.iteritems():
                         if org_key is not "organisation":
-                            org_values = org_values + '"' + str(org_value) + '"' + ","
+                            org_values = org_values + '"' + str(org_value) + '"' + column_delimiter
                 else:
                     failed_lookup_write_queue.put(inetnum_object)
             elif inetnum_key is not "country":
                 inetnum_value = '"' + inetnum_value + '"'
 
-        temp_record = temp_record + inetnum_value + ","
+        temp_record = temp_record + inetnum_value + column_delimiter
 
     temp_record = temp_record + org_values + route_values
     return temp_record[:-1] + "\n"
@@ -455,7 +456,12 @@ registry_data_directory = "data/"
 tmp_directory = "tmp/"
 output_directory = "output/"
 
-lines_to_process = 1000
+# registry_data_directory = "../RIPE-Data/"
+# tmp_directory = "tmp/"
+# output_directory = "../VerticaTest/"
+
+lines_to_process = 10000
+column_delimiter = "\024"
 
 
 # MAIN

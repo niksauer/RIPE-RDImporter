@@ -10,6 +10,44 @@ import os
 import time
 import multiprocessing as mp
 
+
+# NETWORK HELPERS
+special_purpose_networks = (
+    '0.0.0.0/8',
+    '10.0.0.0/8',
+    '100.64.0.0/10',
+    '127.0.0.0/8',
+    '169.254.0.0/16',
+    '172.16.0.0/12',
+    '192.0.0.0/24',
+    '192.0.2.0/24',
+    '192.168.0.0/16',
+    '192.175.48.0/24',
+    '198.18.0.0/15',
+    '198.51.100.0/24',
+    '203.0.113.0/24',
+    '224.0.0.0/4',
+    '240.0.0.0/4',
+    '255.255.255.255/32',
+)
+
+
+# Network, Network -> Bool
+def is_subnet_of(a, b):
+    comp_network = ipcalc.Network(str(a.network()) + '/' + str(b.mask))
+    return a.mask >= b.mask and comp_network.network() == b.network()
+
+
+# Network -> Bool
+def is_special_purpose_network(network):
+    for special_network in special_purpose_networks:
+        if is_subnet_of(network, ipcalc.Network(special_network)):
+            return True
+
+    return False
+
+
+# RECORD HELPERS
 ripe_inetnum_attributes = (
     "inetnum",
     "netname",
@@ -106,7 +144,6 @@ target_ripe_route_attributes = (
 )
 
 
-# HELPERS
 # None -> Dict
 def get_empty_inetnum_object():
     return {
@@ -151,52 +188,58 @@ def get_empty_route_object():
     }
 
 
-# Dict -> String
+# Dict -> String/None
 def evaluate_inetnum_object(inetnum_object, failed_organisation_lookup_write_queue):
     temp_record = ""
     org_values = ""
     route_values = ""
-    
-    for inetnum_key, inetnum_value in inetnum_object.iteritems():
-        if inetnum_value is None:
-            if inetnum_key is "org":
-                org_values = "NULL" + column_delimiter + "NULL" + column_delimiter
-            inetnum_value = "NULL"
-        else:
-            if inetnum_key is "inetnum":
-                split_range = split_ip_range(inetnum_value)
-                start_ip = split_range[0]
-                end_ip = split_range[1]
-                inetnum_value = start_ip + column_delimiter + end_ip + column_delimiter + convert_to_cidr_block(inetnum_value)
 
-                # route_info = get_route_info(str(ipcalc.IP(start_ip)))
-                #
-                # if route_info is not None:
-                #     for route_key, route_value in route_info.iteritems():
-                #         if route_key is not "route":
-                #             route_values = route_values + '"' + str(route_value) + '"' + column_delimiter
-                # else:
-                #     route_values = "NULL" + column_delimiter + "NULL" + column_delimiter
-            elif inetnum_key is "org":
-                org_info = get_organisation_info(inetnum_value)
+    ip_prefix = convert_to_ip_prefix(inetnum_object['inetnum'])
 
-                if org_info is not None:
-                    for org_key, org_value in org_info.iteritems():
-                        if org_key is not "organisation":
-                            org_values = org_values + '"' + str(org_value) + '"' + column_delimiter
-                else:
-                    failed_organisation_lookup_write_queue.put(inetnum_object)
-            elif inetnum_key is not "country":
-                inetnum_value = '"' + inetnum_value + '"'
+    if is_special_purpose_network(ipcalc.Network(ip_prefix)):
+        print ip_prefix
+        return None
+    else:
+        for inetnum_key, inetnum_value in inetnum_object.iteritems():
+            if inetnum_value is None:
+                if inetnum_key is "org":
+                    org_values = "NULL" + column_delimiter + "NULL" + column_delimiter
+                inetnum_value = "NULL"
+            else:
+                if inetnum_key is "inetnum":
+                    split_range = split_ip_range(inetnum_value)
+                    start_ip = split_range[0]
+                    end_ip = split_range[1]
+                    inetnum_value = start_ip + column_delimiter + end_ip + column_delimiter + ip_prefix
 
-        temp_record = temp_record + inetnum_value + column_delimiter
+                    # route_info = get_route_info(str(ipcalc.IP(start_ip)))
+                    #
+                    # if route_info is not None:
+                    #     for route_key, route_value in route_info.iteritems():
+                    #         if route_key is not "route":
+                    #             route_values = route_values + '"' + str(route_value) + '"' + column_delimiter
+                    # else:
+                    #     route_values = "NULL" + column_delimiter + "NULL" + column_delimiter
+                elif inetnum_key is "org":
+                    org_info = get_organisation_info(inetnum_value)
 
-    temp_record = temp_record + org_values + route_values
-    return temp_record[:-1] + "\n"
+                    if org_info is not None:
+                        for org_key, org_value in org_info.iteritems():
+                            if org_key is not "organisation":
+                                org_values = org_values + '"' + str(org_value) + '"' + column_delimiter
+                    else:
+                        failed_organisation_lookup_write_queue.put(inetnum_object)
+                elif inetnum_key is not "country":
+                    inetnum_value = '"' + inetnum_value + '"'
+
+            temp_record = temp_record + inetnum_value + column_delimiter
+
+        temp_record = temp_record + org_values + route_values
+        return temp_record[:-1] + "\n"
 
 
 # String -> String
-def convert_to_cidr_block(ip_range):
+def convert_to_ip_prefix(ip_range):
     ips = ip_range.split("-")
     start_ip = ips[0].strip()
     end_ip = ips[1].strip()
@@ -304,7 +347,7 @@ def import_registry_data_linear():
                 line_count = line_count + 1
 
 
-# CONCURRENT IMPORT
+# CONCURRENT MULTI-THREADED IMPORT
 # Int -> [[Int], [Int], ...]
 def get_inetnum_record_boundaries(num_threads):
     line_count = 0
@@ -367,13 +410,17 @@ def import_registry_data_with_concurrent_thread(num_threads):
                 shutil.copyfileobj(src_fp, dest_fp)
 
 
+# CONCURRENT MULTI-PROCESSED IMPORT
 # Byte, multiprocessing.Queue -> None
 def process_record_position(byte_position, write_queue, failed_organisation_lookup_write_queue):
     src_filename = registry_data_directory + file_base_name_registry_data + ".inetnum"
     with open(src_filename) as src_fp:
         src_fp.seek(byte_position)
         record = src_fp.readline() + ''.join(islice(src_fp, 10))
-        write_queue.put(evaluate_inetnum_object(get_inetnum_object(record), failed_organisation_lookup_write_queue))
+        processed_record = evaluate_inetnum_object(get_inetnum_object(record), failed_organisation_lookup_write_queue)
+
+        if processed_record is not None:
+            write_queue.put(processed_record)
 
 
 def process_record_string(record, write_queue):
@@ -450,6 +497,10 @@ def import_registry_data_with_concurrent_process():
     pool.close()
 
 
+# POST-PROCESSING
+
+
+# CONFIG
 now = datetime.datetime.now()
 
 file_base_name_registry_data = "ripe.db"
@@ -460,12 +511,10 @@ file_base_name_output_failed_lookup = "ripe_registry_failed_organisation_lookups
 file_base_name_ending = "_" + str(now.month) + "_" + str(now.day) + "_" + str(now.year) + ".txt"
 
 registry_data_directory = "data/"
+# registry_data_directory = "../RIPE-Data/"
+
 tmp_directory = "tmp/"
 output_directory = "output/"
-
-# registry_data_directory = "../RIPE-Data/"
-# tmp_directory = "tmp/"
-# output_directory = "../VerticaTest/"
 
 lines_to_process = 100000
 column_delimiter = "\024"
@@ -481,7 +530,7 @@ def main():
     # import_registry_data_with_concurrent_thread(8)
     # print("--- %s seconds ---" % (time.time() - start_time))
 
-    # writes (country, org, start IP, end IP, IP prefix, descr, netname, org_type, org_name, asn, as_descr) to tmp CSV file
+    # writes (country, org, start IP, end IP, IP prefix, descr, netname, org_type, org_name) to tmp CSV file
     import_registry_data_with_concurrent_process()
 
 

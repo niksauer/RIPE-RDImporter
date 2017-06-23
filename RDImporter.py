@@ -515,6 +515,7 @@ registry_data_directory = "data/"
 
 tmp_directory = "tmp/"
 output_directory = "output/"
+# output_directory = "../Parsed-RIPE-Data/
 
 lines_to_process = 100000
 column_delimiter = "\024"

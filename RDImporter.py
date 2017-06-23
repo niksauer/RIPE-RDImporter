@@ -163,16 +163,18 @@ def evaluate_inetnum_object(inetnum_object, failed_lookup_write_queue):
         else:
             if inetnum_key is "inetnum":
                 split_range = split_ip_range(inetnum_value)
-                inetnum_value = split_range[0] + column_delimiter + split_range[1] + column_delimiter + convert_to_cidr_block(inetnum_value)
+                start_ip = split_range[0]
+                end_ip = split_range[1]
+                inetnum_value = start_ip + column_delimiter + end_ip + column_delimiter + convert_to_cidr_block(inetnum_value)
 
-                route_info = get_route_info(str(ipcalc.IP(inetnum_value)))
-
-                if route_info is not None:
-                    for route_key, route_value in route_info.iteritems():
-                        if route_key is not "route":
-                            route_values = route_values + '"' + str(route_value) + '"' + column_delimiter
-                else:
-                    route_values = "NULL" + column_delimiter + "NULL" + column_delimiter
+                # route_info = get_route_info(str(ipcalc.IP(start_ip)))
+                #
+                # if route_info is not None:
+                #     for route_key, route_value in route_info.iteritems():
+                #         if route_key is not "route":
+                #             route_values = route_values + '"' + str(route_value) + '"' + column_delimiter
+                # else:
+                #     route_values = "NULL" + column_delimiter + "NULL" + column_delimiter
             elif inetnum_key is "org":
                 org_info = get_organisation_info(inetnum_value)
 
@@ -460,7 +462,7 @@ output_directory = "output/"
 # tmp_directory = "tmp/"
 # output_directory = "../VerticaTest/"
 
-lines_to_process = 10000
+lines_to_process = 1000
 column_delimiter = "\024"
 
 

@@ -31,6 +31,10 @@ special_purpose_networks = (
     '255.255.255.255/32',
 )
 
+data_exceptions = (
+    '0.0.0.0',
+)
+
 
 # Network, Network -> Bool
 def is_subnet_of(a, b):
@@ -42,6 +46,15 @@ def is_subnet_of(a, b):
 def is_special_purpose_network(network):
     for special_network in special_purpose_networks:
         if is_subnet_of(network, ipcalc.Network(special_network)):
+            return True
+
+    return False
+
+
+# String -> Bool
+def is_known_data_exception(start_ip):
+    for exception in data_exceptions:
+        if start_ip == exception:
             return True
 
     return False
@@ -189,27 +202,25 @@ def get_empty_route_object():
 
 
 # Dict -> String/None
-def evaluate_inetnum_object(inetnum_object, failed_organisation_lookup_write_queue):
+def evaluate_inetnum_object(inetnum_object, failed_organisation_lookup_write_queue, exceptions_write_queue):
     temp_record = ""
     org_values = ""
     route_values = ""
 
+    split_range = split_ip_range(inetnum_object['inetnum'])
+    start_ip = split_range[0]
+    end_ip = split_range[1]
     ip_prefix = convert_to_ip_prefix(inetnum_object['inetnum'])
 
-    if is_special_purpose_network(ipcalc.Network(ip_prefix)):
-        print ip_prefix
+    if is_special_purpose_network(ipcalc.Network(ip_prefix)) or is_known_data_exception(start_ip):
+        exceptions_write_queue.put(ip_prefix)
         return None
     else:
         for inetnum_key, inetnum_value in inetnum_object.iteritems():
             if inetnum_value is None:
-                if inetnum_key is "org":
-                    org_values = "NULL" + column_delimiter + "NULL" + column_delimiter
                 inetnum_value = "NULL"
             else:
                 if inetnum_key is "inetnum":
-                    split_range = split_ip_range(inetnum_value)
-                    start_ip = split_range[0]
-                    end_ip = split_range[1]
                     inetnum_value = start_ip + column_delimiter + end_ip + column_delimiter + ip_prefix
 
                     # route_info = get_route_info(str(ipcalc.IP(start_ip)))
@@ -228,6 +239,7 @@ def evaluate_inetnum_object(inetnum_object, failed_organisation_lookup_write_que
                             if org_key is not "organisation":
                                 org_values = org_values + '"' + str(org_value) + '"' + column_delimiter
                     else:
+                        org_values = "NULL" + column_delimiter + "NULL" + column_delimiter
                         failed_organisation_lookup_write_queue.put(inetnum_object)
                 elif inetnum_key is not "country":
                     inetnum_value = '"' + inetnum_value + '"'
@@ -412,12 +424,12 @@ def import_registry_data_with_concurrent_thread(num_threads):
 
 # CONCURRENT MULTI-PROCESSED IMPORT
 # Byte, multiprocessing.Queue -> None
-def process_record_position(byte_position, write_queue, failed_organisation_lookup_write_queue):
+def process_record_position(byte_position, write_queue, failed_organisation_lookup_write_queue, exceptions_write_queue):
     src_filename = registry_data_directory + file_base_name_registry_data + ".inetnum"
     with open(src_filename) as src_fp:
         src_fp.seek(byte_position)
         record = src_fp.readline() + ''.join(islice(src_fp, 10))
-        processed_record = evaluate_inetnum_object(get_inetnum_object(record), failed_organisation_lookup_write_queue)
+        processed_record = evaluate_inetnum_object(get_inetnum_object(record), failed_organisation_lookup_write_queue, exceptions_write_queue)
 
         if processed_record is not None:
             write_queue.put(processed_record)
@@ -455,12 +467,26 @@ def listen_for_failed_organisation_lookup_write_request(queue):
         dest_fp.close()
 
 
+# multiprocessing.Queue -> None
+def listen_for_exception_write_request(queue):
+    dest_filename = output_directory + file_base_name_output_exception + file_base_name_ending
+    with open(dest_filename, "w") as dest_fp:
+        while True:
+            message = queue.get()
+            if message is "EOF":
+                break
+            dest_fp.write(str(message) + "\n")
+            dest_fp.flush()
+        dest_fp.close()
+
+
 # None -> None
 def import_registry_data_with_concurrent_process():
     start_time = time.time()
     manager = mp.Manager()
     write_queue = manager.Queue()
     failed_organisation_lookup_write_queue = manager.Queue()
+    exceptions_write_queue = manager.Queue()
 
     if not os.path.exists(output_directory):
         os.makedirs(output_directory)
@@ -468,6 +494,7 @@ def import_registry_data_with_concurrent_process():
     pool = mp.Pool(mp.cpu_count())
     pool.apply_async(listen_for_record_write_request, [write_queue])
     pool.apply_async(listen_for_failed_organisation_lookup_write_request, [failed_organisation_lookup_write_queue])
+    pool.apply_async(listen_for_exception_write_request, [exceptions_write_queue])
 
     jobs = []
     line_count = 0
@@ -481,7 +508,12 @@ def import_registry_data_with_concurrent_process():
 
             if line.startswith(target_ripe_inetnum_attributes[0] + ":"):
                 jobs.append(pool.apply_async(process_record_position,
-                                             [next_line_byte_position, write_queue, failed_organisation_lookup_write_queue]))
+                                             [
+                                                 next_line_byte_position,
+                                                 write_queue,
+                                                 failed_organisation_lookup_write_queue,
+                                                 exceptions_write_queue
+                                             ]))
                 # record = line + ''.join(islice(src_fp, 10))
                 # jobs.append(pool.apply_async(process_record_string, [record, write_queue]))
 
@@ -493,7 +525,11 @@ def import_registry_data_with_concurrent_process():
 
     execution_time = time.time() - start_time
     print("--- %s seconds ---" % execution_time)
+
     write_queue.put("EOF --- %s seconds ---" % execution_time)
+    failed_organisation_lookup_write_queue.put("EOF")
+    exceptions_write_queue.put("EOF")
+
     pool.close()
 
 
@@ -508,6 +544,7 @@ file_base_name_output_tmp = "ripe_registry"
 file_base_name_output_linear = "ripe_registry_linear"
 file_base_name_output_concurrent = "ripe_registry_concurrent"
 file_base_name_output_failed_lookup = "ripe_registry_failed_organisation_lookups"
+file_base_name_output_exception = "ripe_registry_exceptions"
 file_base_name_ending = "_" + str(now.month) + "_" + str(now.day) + "_" + str(now.year) + ".txt"
 
 registry_data_directory = "data/"
@@ -515,9 +552,9 @@ registry_data_directory = "data/"
 
 tmp_directory = "tmp/"
 output_directory = "output/"
-# output_directory = "../Parsed-RIPE-Data/
+# output_directory = "../Parsed-RIPE-Data/"
 
-lines_to_process = 100000
+lines_to_process = 50000
 column_delimiter = "\024"
 
 

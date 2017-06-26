@@ -219,6 +219,9 @@ def evaluate_inetnum_object(inetnum_object, failed_organisation_lookup_write_que
         for inetnum_key, inetnum_value in inetnum_object.iteritems():
             if inetnum_value is None:
                 inetnum_value = "NULL"
+
+                if inetnum_key is "org":
+                    org_values = "NULL" + column_delimiter + "NULL" + column_delimiter
             else:
                 if inetnum_key is "inetnum":
                     inetnum_value = start_ip + column_delimiter + end_ip + column_delimiter + ip_prefix
@@ -273,7 +276,7 @@ def get_organisation_info(org):
     filename = registry_data_directory + file_base_name_registry_data + ".organisation"
     with open(filename, 'r') as f:
         for line in f:
-            if line.__contains__(org):
+            if line.lower().__contains__(org.lower()):
                 next_line = line.strip()
 
                 for i in range(30):
@@ -554,7 +557,7 @@ tmp_directory = "tmp/"
 output_directory = "output/"
 # output_directory = "../Parsed-RIPE-Data/"
 
-lines_to_process = 50000
+lines_to_process = 10000
 column_delimiter = "\024"
 
 

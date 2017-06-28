@@ -60,7 +60,7 @@ registry_allocations = {
              '88.0.0.0/8', '89.0.0.0/8', '90.0.0.0/8', '91.0.0.0/8', '92.0.0.0/8', '93.0.0.0/8', '94.0.0.0/8',
              '95.0.0.0/8', '109.0.0.0/8', '141.0.0.0/8', '145.0.0.0/8', '151.0.0.0/8', '176.0.0.0/8', '178.0.0.0/8',
              '185.0.0.0/8', '188.0.0.0/8', '193.0.0.0/8', '194.0.0.0/8', '195.0.0.0/8', '212.0.0.0/8', '213.0.0.0/8',
-             '217.0.0.0/8']
+             '217.0.0.0/8', '192.0.0.0/8']
 }
 
 
@@ -314,7 +314,7 @@ def get_organisation_info(org):
     filename = registry_data_directory + file_base_name_registry_data + ".organisation"
     with open(filename, 'r') as f:
         for line in f:
-            if line.lower().__contains__(org.lower()):
+            if line.__contains__(org):
                 next_line = line.strip()
 
                 for i in range(30):
@@ -511,6 +511,7 @@ def listen_for_failed_organisation_lookup_write_request(queue):
 # multiprocessing.Queue -> None
 def listen_for_exception_write_request(queue):
     dest_filename = output_directory + file_base_name_output_exception + file_base_name_ending
+
     with open(dest_filename, "w") as dest_fp:
         while True:
             message = queue.get()
@@ -595,7 +596,7 @@ tmp_directory = "tmp/"
 output_directory = "output/"
 # output_directory = "../Parsed-RIPE-Data/"
 
-lines_to_process = 50000
+lines_to_process = 1000000
 column_delimiter = "\024"
 
 

@@ -588,7 +588,7 @@ def post_process_registry_data():
 
     with open(src_filename) as src_fp:
         for line in src_fp:
-            # print line_count
+            print line_count
 
             ip_prefix = line.split(column_delimiter)[4]
 

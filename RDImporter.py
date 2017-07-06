@@ -35,33 +35,22 @@ ip_exceptions = (
     '0.0.0.0',
 )
 
-registry_allocations = {
-    'afrinic': [],
-    'apnic': ['1.0.0.0', '14.0.0.0', '27.0.0.0', '36.0.0.0', '39.0.0.0', '42.0.0.0', '43.0.0.0', '49.0.0.0', '58.0.0.0',
-              '59.0.0.0', '101.0.0.0', '103.0.0.0', '106.0.0.0', '110.0.0.0', '111.0.0.0', '112.0.0.0', '113.0.0.0',
-              '114.0.0.0', '116.0.0.0', '117.0.0.0', '119.0.0.0', '120.0.0.0', '121.0.0.0', '122.0.0.0', '123.0.0.0',
-              '124.0.0.0', '125.0.0.0', '133.0.0.0', '139.0.0.0', '140.0.0.0', '144.0.0.0', '150.0.0.0', '153.0.0.0',
-              '157.0.0.0', '163.0.0.0', '171.0.0.0', '175.0.0.0', '182.0.0.0', '183.0.0.0', '202.0.0.0', '203.0.0.0',
-              '210.0.0.0', '218.0.0.0', '219.0.0.0', '220.0.0.0', '222.0.0.0', '223.0.0.0'],
-    'arin': ['3.0.0.0', '4.0.0.0', '6.0.0.0', '7.0.0.0', '8.0.0.0', '9.0.0.0', '11.0.0.0', '12.0.0.0', '13.0.0.0',
-             '16.0.0.0', '17.0.0.0', '19.0.0.0', '21.0.0.0', '22.0.0.0', '23.0.0.0', '24.0.0.0', '26.0.0.0', '28.0.0.0',
-             '29.0.0.0', '30.0.0.0', '33.0.0.0', '35.0.0.0', '38.0.0.0', '40.0.0.0', '44.0.0.0', '45.0.0.0', '47.0.0.0',
-             '48.0.0.0', '50.0.0.0', '52.0.0.0', '55.0.0.0', '56.0.0.0', '63.0.0.0', '64.0.0.0', '65.0.0.0', '66.0.0.0',
-             '67.0.0.0', '68.0.0.0', '69.0.0.0', '70.0.0.0', '71.0.0.0', '72.0.0.0', '73.0.0.0', '75.0.0.0', '76.0.0.0',
-             '96.0.0.0', '97.0.0.0', '98.0.0.0', '99.0.0.0', '104.0.0.0', '107.0.0.0', '132.0.0.0', '135.0.0.0',
-             '136.0.0.0', '137.0.0.0', '142.0.0.0', '147.0.0.0', '158.0.0.0', '162.0.0.0', '166.0.0.0', '172.0.0.0',
-             '173.0.0.0', '174.0.0.0', '184.0.0.0', '198.0.0.0', '199.0.0.0', '204.0.0.0', '209.0.0.0', '214.0.0.0',
-             '215.0.0.0'],
-    'lacnic': ['131.0.0.0', '138.0.0.0', '143.0.0.0', '148.0.0.0', '152.0.0.0', '161.0.0.0', '167.0.0.0', '168.0.0.0',
-               '170.0.0.0', '179.0.0.0', '181.0.0.0', '186.0.0.0', '187.0.0.0', '190.0.0.0', '191.0.0.0', '200.0.0.0'],
-    'ripe': ['2.0.0.0/8', '5.0.0.0/8', '25.0.0.0/8', '31.0.0.0/8', '37.0.0.0/8', '46.0.0.0/8', '51.0.0.0/8',
-             '53.0.0.0/8', '57.0.0.0/8', '62.0.0.0/8', '77.0.0.0/8', '78.0.0.0/8', '79.0.0.0/8', '80.0.0.0/8',
-             '81.0.0.0/8', '82.0.0.0/8', '83.0.0.0/8', '84.0.0.0/8', '85.0.0.0/8', '86.0.0.0/8', '87.0.0.0/8',
-             '88.0.0.0/8', '89.0.0.0/8', '90.0.0.0/8', '91.0.0.0/8', '92.0.0.0/8', '93.0.0.0/8', '94.0.0.0/8',
-             '95.0.0.0/8', '109.0.0.0/8', '141.0.0.0/8', '145.0.0.0/8', '151.0.0.0/8', '176.0.0.0/8', '178.0.0.0/8',
-             '185.0.0.0/8', '188.0.0.0/8', '193.0.0.0/8', '194.0.0.0/8', '195.0.0.0/8', '212.0.0.0/8', '213.0.0.0/8',
-             '217.0.0.0/8', '192.0.0.0/8']
-}
+non_ripe_networks = (
+    '189.0.0.0/8', '182.0.0.0/8', '124.0.0.0/8', '120.0.0.0/8', '119.0.0.0/8', '118.0.0.0/8', '115.0.0.0/8',
+    '114.0.0.0/8', '106.0.0.0/8', '102.0.0.0/8', '190.0.0.0/8', '184.0.0.0/8', '183.0.0.0/8', '181.0.0.0/8',
+    '180.0.0.0/8', '179.0.0.0/8', '174.0.0.0/8', '133.0.0.0/8', '126.0.0.0/8', '123.0.0.0/8', '116.0.0.0/8',
+    '112.0.0.0/8', '110.0.0.0/8', '191.0.0.0/8', '187.0.0.0/8', '186.0.0.0/8', '177.0.0.0/8', '175.0.0.0/8',
+    '125.0.0.0/8', '122.0.0.0/8', '121.0.0.0/8', '117.0.0.0/8', '111.0.0.0/8', '108.0.0.0/8', '105.0.0.0/8',
+    '101.0.0.0/8', '71.0.0.0/8', '70.0.0.0/8', '41.0.0.0/8', '35.0.0.0/8', '30.0.0.0/8', '29.0.0.0/8', '27.0.0.0/8',
+    '20.0.0.0/8', '11.0.0.0/8', '6.0.0.0/8', '221.0.0.0/8', '215.0.0.0/8', '211.0.0.0/8', '98.0.0.0/8', '97.0.0.0/8',
+    '76.0.0.0/8', '74.0.0.0/8', '73.0.0.0/8', '56.0.0.0/8', '47.0.0.0/8', '44.0.0.0/8', '39.0.0.0/8', '34.0.0.0/8',
+    '33.0.0.0/8', '26.0.0.0/8', '22.0.0.0/8', '21.0.0.0/8', '19.0.0.0/8', '16.0.0.0/8', '15.0.0.0/8', '12.0.0.0/8',
+    '8.0.0.0/8', '4.0.0.0/8', '3.0.0.0/8', '222.0.0.0/8', '220.0.0.0/8', '219.0.0.0/8', '214.0.0.0/8', '202.0.0.0/8',
+    '200.0.0.0/8', '99.0.0.0/8', '75.0.0.0/8', '72.0.0.0/8', '68.0.0.0/8', '61.0.0.0/8', '60.0.0.0/8', '59.0.0.0/8',
+    '58.0.0.0/8', '55.0.0.0/8', '54.0.0.0/8', '50.0.0.0/8', '49.0.0.0/8', '48.0.0.0/8', '42.0.0.0/8', '40.0.0.0/8',
+    '38.0.0.0/8', '36.0.0.0/8', '32.0.0.0/8', '28.0.0.0/8', '18.0.0.0/8', '17.0.0.0/8', '14.0.0.0/8', '9.0.0.0/8',
+    '7.0.0.0/8', '1.0.0.0/8', '223.0.0.0/8', '218.0.0.0/8', '210.0.0.0/8', '201.0.0.0/8', '197.0.0.0/8'
+)
 
 
 # Network, Network -> Bool
@@ -90,12 +79,11 @@ def is_known_ip_exception(start_ip):
 
 # String -> Bool
 def is_foreign_network(start_ip):
-    for network in registry_allocations['ripe']:
+    for network in non_ripe_networks:
         if start_ip in ipcalc.Network(network):
-            return False
+            return True
 
-    print start_ip
-    return True
+    return False
 
 
 # RECORD HELPERS
@@ -537,6 +525,7 @@ def import_registry_data_with_concurrent_process():
     pool.apply_async(listen_for_record_write_request, [write_queue])
     pool.apply_async(listen_for_failed_organisation_lookup_write_request, [failed_organisation_lookup_write_queue])
     pool.apply_async(listen_for_exception_write_request, [exceptions_write_queue])
+    write_queue.put("# country, org, start IP, end IP, IP prefix, descr, netname, org_type, org_name\n")
 
     jobs = []
     line_count = 0
@@ -576,6 +565,57 @@ def import_registry_data_with_concurrent_process():
 
 
 # POST-PROCESSING
+def post_process_registry_data():
+    # MULTIPROCESSING SETUP
+    start_time = time.time()
+    manager = mp.Manager()
+    write_queue = manager.Queue()
+
+    if not os.path.exists(output_directory):
+        os.makedirs(output_directory)
+
+    # FILE SETUP
+    # TODO: find newest file
+    file_date = "6_27_2017"
+    src_filename = output_directory + file_base_name_output_concurrent + "_process_" + file_date + ".txt"
+
+    pool = mp.Pool(mp.cpu_count())
+    pool.apply_async(listen_for_final_record_write_request, [write_queue, file_date])
+    write_queue.put("# country, org, start IP, end IP, IP prefix, descr, netname, org_type, org_name\n")
+
+    # ALGORITHM SETUP
+    line_count = 0
+
+    with open(src_filename) as src_fp:
+        for line in src_fp:
+            # print line_count
+
+            ip_prefix = line.split(column_delimiter)[4]
+
+            if not is_foreign_network(ip_prefix):
+                write_queue.put(line)
+
+            line_count = line_count + 1
+
+    execution_time = time.time() - start_time
+    print("--- %s seconds ---" % execution_time)
+    write_queue.put("EOF --- processed %d networks in %s seconds ---" % (line_count, execution_time))
+
+    pool.close()
+
+
+# multiprocessing.Queue -> None
+def listen_for_final_record_write_request(queue, file_date):
+    dest_filename = output_directory + file_base_name_output_concurrent + "_process_post_" + file_date + ".txt"
+
+    with open(dest_filename, "w") as dest_fp:
+        while True:
+            message = queue.get()
+            if message is "EOF":
+                break
+            dest_fp.write(str(message))
+            dest_fp.flush()
+        dest_fp.close()
 
 
 # CONFIG
@@ -596,7 +636,7 @@ tmp_directory = "tmp/"
 output_directory = "output/"
 # output_directory = "../Parsed-RIPE-Data/"
 
-lines_to_process = 1000000
+lines_to_process = 1000
 column_delimiter = "\024"
 
 
@@ -604,14 +644,13 @@ column_delimiter = "\024"
 def main():
     # start_time = time.time()
     # import_registry_data_linear()
-    # print("--- %s seconds ---" % (time.time() - start_time))
-    #
-    # start_time = time.time()
     # import_registry_data_with_concurrent_thread(8)
     # print("--- %s seconds ---" % (time.time() - start_time))
 
-    # writes (country, org, start IP, end IP, IP prefix, descr, netname, org_type, org_name) to tmp CSV file
-    import_registry_data_with_concurrent_process()
+    # import_registry_data_with_concurrent_process()
+    post_process_registry_data()
+
+    return
 
 
 if __name__ == '__main__':

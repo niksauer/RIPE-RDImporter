@@ -1,17 +1,12 @@
 from itertools import islice
-import glob
-
 import datetime
-import gevent
 import ipcalc
 import netaddr
-import shutil
 import os
 import time
-import multiprocessing as mp
+import multiprocessing
 
-
-# NETWORK HELPERS
+# source: https://www.iana.org/assignments/iana-ipv4-special-registry/iana-ipv4-special-registry.xhtml
 special_purpose_networks = (
     '0.0.0.0/8',
     '10.0.0.0/8',
@@ -35,6 +30,7 @@ ip_exceptions = (
     '0.0.0.0',
 )
 
+# TODO: auto-retrieve list via VSQL query
 non_ripe_networks = (
     '189.0.0.0/8', '182.0.0.0/8', '124.0.0.0/8', '120.0.0.0/8', '119.0.0.0/8', '118.0.0.0/8', '115.0.0.0/8',
     '114.0.0.0/8', '106.0.0.0/8', '102.0.0.0/8', '190.0.0.0/8', '184.0.0.0/8', '183.0.0.0/8', '181.0.0.0/8',
@@ -53,6 +49,7 @@ non_ripe_networks = (
 )
 
 
+# -- NETWORK/IP HELPERS -- #
 # Network, Network -> Bool
 def is_subnet_of(a, b):
     comp_network = ipcalc.Network(str(a.network()) + '/' + str(b.mask))
@@ -68,25 +65,25 @@ def is_special_purpose_network(network):
     return False
 
 
-# String -> Bool
-def is_known_ip_exception(start_ip):
+# IP -> Bool
+def is_known_ip_exception(ip):
     for exception in ip_exceptions:
-        if start_ip == exception:
+        if ip == ipcalc.IP(exception):
             return True
 
     return False
 
 
-# String -> Bool
-def is_foreign_network(start_ip):
-    for network in non_ripe_networks:
-        if start_ip in ipcalc.Network(network):
+# Network -> Bool
+def is_foreign_network(network):
+    for non_ripe_network in non_ripe_networks:
+        if network in ipcalc.Network(non_ripe_network):
             return True
 
     return False
 
 
-# RECORD HELPERS
+# -- RECORD HELPERS -- #
 ripe_inetnum_attributes = (
     "inetnum",
     "netname",
@@ -184,6 +181,24 @@ target_ripe_route_attributes = (
 
 
 # None -> Dict
+def get_empty_organisation_object():
+    return {
+        "organisation": None,
+        "org-name": None,
+        "org-type": None,
+    }
+
+
+# None -> Dict
+def get_empty_route_object():
+    return {
+        "route": None,
+        "descr": None,
+        "origin": None
+    }
+
+
+# None -> Dict
 def get_empty_inetnum_object():
     return {
         "inetnum": None,
@@ -195,6 +210,7 @@ def get_empty_inetnum_object():
 
 
 # String -> Dict
+# TODO: honor multi line attributes
 def get_inetnum_object(record):
     temp_object = get_empty_inetnum_object()
 
@@ -209,24 +225,6 @@ def get_inetnum_object(record):
     return temp_object
 
 
-# None -> Dict
-def get_empty_organisation_object():
-    return {
-        "organisation": None,
-        "org-name": None,
-        "org-type": None,
-    }
-
-
-# None
-def get_empty_route_object():
-    return {
-        "route": None,
-        "descr": None,
-        "origin": None
-    }
-
-
 # Dict -> String/None
 def evaluate_inetnum_object(inetnum_object, failed_organisation_lookup_write_queue, exceptions_write_queue):
     temp_record = ""
@@ -238,7 +236,7 @@ def evaluate_inetnum_object(inetnum_object, failed_organisation_lookup_write_que
     end_ip = split_range[1]
     ip_prefix = convert_to_ip_prefix(inetnum_object['inetnum'])
 
-    if is_special_purpose_network(ipcalc.Network(ip_prefix)) or is_known_ip_exception(start_ip):
+    if is_special_purpose_network(ipcalc.Network(ip_prefix)) or is_known_ip_exception(ipcalc.IP(start_ip)):
         exceptions_write_queue.put(ip_prefix)
         return None
     else:
@@ -251,15 +249,6 @@ def evaluate_inetnum_object(inetnum_object, failed_organisation_lookup_write_que
             else:
                 if inetnum_key is "inetnum":
                     inetnum_value = start_ip + column_delimiter + end_ip + column_delimiter + ip_prefix
-
-                    # route_info = get_route_info(str(ipcalc.IP(start_ip)))
-                    #
-                    # if route_info is not None:
-                    #     for route_key, route_value in route_info.iteritems():
-                    #         if route_key is not "route":
-                    #             route_values = route_values + '"' + str(route_value) + '"' + column_delimiter
-                    # else:
-                    #     route_values = "NULL" + column_delimiter + "NULL" + column_delimiter
                 elif inetnum_key is "org":
                     org_info = get_organisation_info(inetnum_value)
 
@@ -279,6 +268,7 @@ def evaluate_inetnum_object(inetnum_object, failed_organisation_lookup_write_que
         return temp_record[:-1] + "\n"
 
 
+# -- HELPERS -- #
 # String -> String
 def convert_to_ip_prefix(ip_range):
     ips = ip_range.split("-")
@@ -295,7 +285,15 @@ def split_ip_range(ip_range):
     return start_ip, end_ip
 
 
+# [Int], Int -> [[Int], [Int], ...]
+def split_list_into_n_parts(a, n):
+    k, m = divmod(len(a), n)
+    return list(a[i * k + min(i, m):(i + 1) * k + min(i + 1, m)] for i in xrange(n))
+
+
+# -- REFERENTIAL DATA HELPERS -- #
 # String -> Dict/None
+# TODO: use case-insensitive lookup for higher hit rate
 def get_organisation_info(org):
     object_count = -1
     temp_object = get_empty_organisation_object()
@@ -322,139 +320,11 @@ def get_organisation_info(org):
                     next_line = f.next().strip()
 
 
-# String -> Dict
-def get_route_info(ip):
-    object_count = -1
-    temp_object = get_empty_route_object()
-    filename = registry_data_directory + file_base_name_registry_data + ".route"
-    with open(filename, 'r') as f:
-        for line in f:
-            if line.__contains__(ip):
-                next_line = line.strip()
-
-                for i in range(30):
-                    for target_attribute in target_ripe_route_attributes:
-                        target = target_attribute + ":"
-
-                        if next_line.startswith(target):
-                            if target_attribute is target_ripe_route_attributes[0]:
-                                object_count = object_count + 1
-
-                                if object_count == 1:
-                                    return temp_object
-
-                            attribute_value = next_line[len(target):].strip()
-                            temp_object[target_attribute] = attribute_value
-
-                    next_line = f.next().strip()
-
-
-# [Int], Int -> [[Int], [Int], ...]
-def split_list_into_n_parts(a, n):
-    k, m = divmod(len(a), n)
-    return list(a[i * k + min(i, m):(i + 1) * k + min(i + 1, m)] for i in xrange(n))
-
-
-# NON-CONCURRENT IMPORT
-# None -> None
-def import_registry_data_linear():
-    line_count = 0
-    object_count = -1
-
-    temp_object = get_empty_inetnum_object()
-    dest_filename = output_directory + file_base_name_output_linear + file_base_name_ending
-    src_filename = registry_data_directory + file_base_name_registry_data + ".inetnum"
-    with open(dest_filename, "w") as dest_fp:
-        with open(src_filename) as src_fp:
-            for line in src_fp:
-                if line_count > lines_to_process:
-                    break
-
-                for target_attribute in target_ripe_inetnum_attributes:
-                    target = target_attribute + ":"
-
-                    if line.startswith(target):
-                        if target_attribute is target_ripe_inetnum_attributes[0]:
-                            object_count = object_count + 1
-
-                            if object_count >= 1:
-                                record = evaluate_inetnum_object(temp_object)
-                                dest_fp.write(record)
-                                temp_object = get_empty_inetnum_object()
-
-                        attribute_value = line[len(target):].strip()
-                        temp_object[target_attribute] = attribute_value
-
-                line_count = line_count + 1
-
-
-# CONCURRENT MULTI-THREADED IMPORT
-# Int -> [[Int], [Int], ...]
-def get_inetnum_record_boundaries(num_threads):
-    line_count = 0
-    boundaries = []
-    filename = registry_data_directory + file_base_name_registry_data + ".inetnum"
-    with open(filename) as src_fp:
-        for line in src_fp:
-            if line_count > lines_to_process:
-                break
-
-            if line.startswith(target_ripe_inetnum_attributes[0] + ":"):
-                boundaries.append(line_count)
-
-            line_count = line_count + 1
-
-    return split_list_into_n_parts(boundaries, num_threads)
-
-
-# [Int], Int -> None
-def import_registry_data_in_range(record_boundaries, thread_num):
-    line_count = 0
-    record_count = 0
-
-    dest_filename = str(tmp_directory) + str(file_base_name_output_tmp) + "_part_" + str(thread_num) + ".txt"
-    src_filename = registry_data_directory + file_base_name_registry_data + ".inetnum"
-
-    with open(dest_filename, "w") as dest_fp:
-        with open(src_filename) as src_fp:
-            for line in src_fp:
-                if (record_count+1) > len(record_boundaries):
-                    break
-
-                if line_count == record_boundaries[record_count]:
-                    record = line + ''.join(islice(src_fp, 10))
-                    dest_fp.write(evaluate_inetnum_object(get_inetnum_object(record)))
-                    record_count = record_count + 1
-                    line_count = line_count + 11
-                else:
-                    line_count = line_count + 1
-
-
-# None -> None
-def import_registry_data_with_concurrent_thread(num_threads):
-    if os.path.exists(tmp_directory):
-        shutil.rmtree(tmp_directory)
-
-    os.makedirs(tmp_directory)
-
-    record_boundaries = get_inetnum_record_boundaries(num_threads)
-
-    threads = [gevent.spawn(import_registry_data_in_range(record_boundaries[i], i))
-               for i in xrange(len(record_boundaries))]
-
-    gevent.joinall(threads)
-
-    dest_filename = output_directory + file_base_name_output_concurrent + "_thread.txt"
-    with open(dest_filename, 'wb') as dest_fp:
-        for tmp_fp in glob.glob(tmp_directory + "*.txt"):
-            with open(tmp_fp, 'rb') as src_fp:
-                shutil.copyfileobj(src_fp, dest_fp)
-
-
-# CONCURRENT MULTI-PROCESSED IMPORT
+# -- CONCURRENT MULTI-PROCESSED DATA IMPORT -- #
 # Byte, multiprocessing.Queue -> None
 def process_record_position(byte_position, write_queue, failed_organisation_lookup_write_queue, exceptions_write_queue):
     src_filename = registry_data_directory + file_base_name_registry_data + ".inetnum"
+
     with open(src_filename) as src_fp:
         src_fp.seek(byte_position)
         record = src_fp.readline() + ''.join(islice(src_fp, 10))
@@ -464,15 +334,9 @@ def process_record_position(byte_position, write_queue, failed_organisation_look
             write_queue.put(processed_record)
 
 
-def process_record_string(record, write_queue):
-    processed_record = evaluate_inetnum_object(get_inetnum_object(record))
-    write_queue.put(processed_record)
-    return
-
-
 # multiprocessing.Queue -> None
 def listen_for_record_write_request(queue):
-    dest_filename = output_directory + file_base_name_output_concurrent + "_process" + file_base_name_ending
+    dest_filename = output_directory + file_base_name_output + file_base_name_ending
     with open(dest_filename, "w") as dest_fp:
         while True:
             message = queue.get()
@@ -511,9 +375,9 @@ def listen_for_exception_write_request(queue):
 
 
 # None -> None
-def import_registry_data_with_concurrent_process():
+def import_ripe_registry_data():
     start_time = time.time()
-    manager = mp.Manager()
+    manager = multiprocessing.Manager()
     write_queue = manager.Queue()
     failed_organisation_lookup_write_queue = manager.Queue()
     exceptions_write_queue = manager.Queue()
@@ -521,7 +385,7 @@ def import_registry_data_with_concurrent_process():
     if not os.path.exists(output_directory):
         os.makedirs(output_directory)
 
-    pool = mp.Pool(mp.cpu_count())
+    pool = multiprocessing.Pool(multiprocessing.cpu_count())
     pool.apply_async(listen_for_record_write_request, [write_queue])
     pool.apply_async(listen_for_failed_organisation_lookup_write_request, [failed_organisation_lookup_write_queue])
     pool.apply_async(listen_for_exception_write_request, [exceptions_write_queue])
@@ -545,8 +409,6 @@ def import_registry_data_with_concurrent_process():
                                                  failed_organisation_lookup_write_queue,
                                                  exceptions_write_queue
                                              ]))
-                # record = line + ''.join(islice(src_fp, 10))
-                # jobs.append(pool.apply_async(process_record_string, [record, write_queue]))
 
             next_line_byte_position = next_line_byte_position + len(line)
             line_count = line_count + 1
@@ -564,23 +426,21 @@ def import_registry_data_with_concurrent_process():
     pool.close()
 
 
-# POST-PROCESSING
-def post_process_registry_data():
+# -- CONCURRENT MULTI-PROCESSED POST-PROCESSING OF IMPORTED DATA -- #
+def post_process_ripe_registry_data():
     # MULTIPROCESSING SETUP
     start_time = time.time()
-    manager = mp.Manager()
+    manager = multiprocessing.Manager()
     write_queue = manager.Queue()
 
     if not os.path.exists(output_directory):
         os.makedirs(output_directory)
 
     # FILE SETUP
-    # TODO: find newest file
-    file_date = "6_27_2017"
-    src_filename = output_directory + file_base_name_output_concurrent + "_process_" + file_date + ".txt"
+    src_filename = output_directory + file_base_name_output + "_" + file_date_for_post_processing + ".txt"
 
-    pool = mp.Pool(mp.cpu_count())
-    pool.apply_async(listen_for_final_record_write_request, [write_queue, file_date])
+    pool = multiprocessing.Pool(multiprocessing.cpu_count())
+    pool.apply_async(listen_for_final_record_write_request, [write_queue])
     write_queue.put("# country, org, start IP, end IP, IP prefix, descr, netname, org_type, org_name\n")
 
     # ALGORITHM SETUP
@@ -588,11 +448,15 @@ def post_process_registry_data():
 
     with open(src_filename) as src_fp:
         for line in src_fp:
-            print line_count
+            if line.startswith("EOF"):
+                break
+
+            if line.startswith("#"):
+                continue
 
             ip_prefix = line.split(column_delimiter)[4]
 
-            if not is_foreign_network(ip_prefix):
+            if not is_foreign_network(ipcalc.Network(ip_prefix)):
                 write_queue.put(line)
 
             line_count = line_count + 1
@@ -605,8 +469,8 @@ def post_process_registry_data():
 
 
 # multiprocessing.Queue -> None
-def listen_for_final_record_write_request(queue, file_date):
-    dest_filename = output_directory + file_base_name_output_concurrent + "_process_post_" + file_date + ".txt"
+def listen_for_final_record_write_request(queue):
+    dest_filename = output_directory + file_base_name_output + "_post_" + file_date_for_post_processing + ".txt"
 
     with open(dest_filename, "w") as dest_fp:
         while True:
@@ -622,9 +486,7 @@ def listen_for_final_record_write_request(queue, file_date):
 now = datetime.datetime.now()
 
 file_base_name_registry_data = "ripe.db"
-file_base_name_output_tmp = "ripe_registry"
-file_base_name_output_linear = "ripe_registry_linear"
-file_base_name_output_concurrent = "ripe_registry_concurrent"
+file_base_name_output = "ripe_registry_data"
 file_base_name_output_failed_lookup = "ripe_registry_failed_organisation_lookups"
 file_base_name_output_exception = "ripe_registry_exceptions"
 file_base_name_ending = "_" + str(now.month) + "_" + str(now.day) + "_" + str(now.year) + ".txt"
@@ -638,17 +500,13 @@ output_directory = "output/"
 
 lines_to_process = 1000
 column_delimiter = "\024"
+file_date_for_post_processing = "7_7_2017"
 
 
 # MAIN
 def main():
-    # start_time = time.time()
-    # import_registry_data_linear()
-    # import_registry_data_with_concurrent_thread(8)
-    # print("--- %s seconds ---" % (time.time() - start_time))
-
-    # import_registry_data_with_concurrent_process()
-    post_process_registry_data()
+    import_ripe_registry_data()
+    post_process_ripe_registry_data()
 
     return
 

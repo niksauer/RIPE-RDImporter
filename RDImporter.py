@@ -377,6 +377,7 @@ def listen_for_exception_write_request(queue):
 
 
 # None -> None
+# TODO: allow processing of X lines starting from line Y
 def import_ripe_registry_data():
     start_time = time.time()
     manager = multiprocessing.Manager()
@@ -434,6 +435,7 @@ def import_ripe_registry_data():
 
 
 # -- CONCURRENT MULTI-PROCESSED POST-PROCESSING OF IMPORTED DATA -- #
+# TODO: replace file post processing with VSQL deletion
 def post_process_ripe_registry_data():
     # MULTIPROCESSING SETUP
     start_time = time.time()

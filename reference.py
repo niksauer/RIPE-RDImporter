@@ -156,3 +156,4 @@ def get_route_info(ip):
 # CONFIG
 file_base_name_output_tmp = "ripe_registry"
 file_base_name_output_linear = "ripe_registry_linear"
+tmp_directory = ""

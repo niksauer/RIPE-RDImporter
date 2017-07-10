@@ -1,5 +1,7 @@
 from itertools import islice
 import datetime
+
+import configparser
 import ipcalc
 import netaddr
 import os
@@ -398,7 +400,7 @@ def import_ripe_registry_data():
         next_line_byte_position = 0
 
         for line in src_fp:
-            if line_count > lines_to_process:
+            if line_count > lines_to_process > 0:
                 break
 
             if line.startswith(target_ripe_inetnum_attributes[0] + ":"):
@@ -416,10 +418,15 @@ def import_ripe_registry_data():
     for job in jobs:
         job.get()
 
-    execution_time = time.time() - start_time
-    print("--- %s seconds ---" % execution_time)
+    line_msg = str(lines_to_process)
 
-    write_queue.put("EOF --- %s seconds ---" % execution_time)
+    if lines_to_process == 0:
+        line_msg = "all"
+
+    execution_time = time.time() - start_time
+    print("--- processed %s lines in %s seconds ---" % (line_msg, execution_time))
+
+    write_queue.put("EOF --- processed %s lines in %s seconds ---" % (line_msg, execution_time))
     failed_organisation_lookup_write_queue.put("EOF")
     exceptions_write_queue.put("EOF")
 
@@ -441,7 +448,7 @@ def post_process_ripe_registry_data():
 
     pool = multiprocessing.Pool(multiprocessing.cpu_count())
     pool.apply_async(listen_for_final_record_write_request, [write_queue])
-    write_queue.put("# country, org, start IP, end IP, IP prefix, descr, netname, org_type, org_name\n")
+    write_queue.put("# country_code, org_code, start_ip, end_ip, ip_prefix, descr, netname, org_type, org_name\n")
 
     # ALGORITHM SETUP
     line_count = 0
@@ -462,8 +469,8 @@ def post_process_ripe_registry_data():
             line_count = line_count + 1
 
     execution_time = time.time() - start_time
-    print("--- %s seconds ---" % execution_time)
-    write_queue.put("EOF --- processed %d networks in %s seconds ---" % (line_count, execution_time))
+    print("--- post processed %d networks in %s seconds ---" % (line_count, execution_time))
+    write_queue.put("EOF --- post processed %d networks in %s seconds ---" % (line_count, execution_time))
 
     pool.close()
 
@@ -482,33 +489,138 @@ def listen_for_final_record_write_request(queue):
         dest_fp.close()
 
 
-# CONFIG
+# CONFIGURATION
 now = datetime.datetime.now()
-
-file_base_name_registry_data = "ripe.db"
-file_base_name_output = "ripe_registry_data"
-file_base_name_output_failed_lookup = "ripe_registry_failed_organisation_lookups"
-file_base_name_output_exception = "ripe_registry_exceptions"
 file_base_name_ending = "_" + str(now.month) + "_" + str(now.day) + "_" + str(now.year) + ".txt"
 
+file_base_name_registry_data = ""
+file_base_name_output = ""
+file_base_name_output_failed_lookup = ""
+file_base_name_output_exception = ""
+
 registry_data_directory = "data/"
-# registry_data_directory = "../RIPE-Data/"
+output_directory = ""
 
-tmp_directory = "tmp/"
-output_directory = "output/"
-# output_directory = "../Parsed-RIPE-Data/"
+lines_to_process = 0
+column_delimiter = ""
+file_date_for_post_processing = ""
 
-lines_to_process = 1000
-column_delimiter = "\024"
-file_date_for_post_processing = "7_7_2017"
+do_parse_task = True
+do_post_process_task = True
 
 
-# MAIN
+def setup():
+    config = configparser.ConfigParser()
+    config.read('config.ini')
+
+    # DIRECTORY SETTINGS
+    global registry_data_directory
+    registry_data_directory = config['DIRECTORIES']['RegistryDataDirectory']
+
+    if registry_data_directory in ("None", ""):
+        print "Please specify the directory for RIPE's DB snapshots."
+        return False
+
+    if not registry_data_directory.endswith('/'):
+        registry_data_directory = registry_data_directory + "/"
+
+    global output_directory
+    output_directory = config['DIRECTORIES']['OutputDirectory']
+
+    if output_directory in ("None", ""):
+        print "Please specify the directory for produced output."
+        return False
+
+    if not output_directory.endswith('/'):
+        output_directory = output_directory + "/"
+
+    # OUTPUT SETTINGS
+    global file_base_name_registry_data
+    file_base_name_registry_data = config['OUTPUT']['FileBaseRegistryData']
+
+    if file_base_name_registry_data in ("None", ""):
+        file_base_name_registry_data = "ripe.db"
+
+    global file_base_name_output
+    file_base_name_output = config['OUTPUT']['FileBaseOutput']
+
+    if file_base_name_output in ("None", ""):
+        file_base_name_output = "ripe_registry_data"
+
+    global file_base_name_output_failed_lookup
+    file_base_name_output_failed_lookup = config['OUTPUT']['FileBaseFailedLookup']
+
+    if file_base_name_output_failed_lookup in ("None", ""):
+        file_base_name_output_failed_lookup = "ripe_registry_failed_organisation_lookups"
+
+    global file_base_name_output_exception
+    file_base_name_output_exception = config['OUTPUT']['FileBaseException']
+
+    if file_base_name_output_exception in ("None", ""):
+        file_base_name_output_exception = "ripe_registry_exceptions"
+
+    # TASK SETTINGS
+    global column_delimiter
+    column_delimiter = config['TASK']['ColumnDelimiter']
+
+    if column_delimiter in ("None", ""):
+        print "Please specify column delimiter for output."
+        return False
+
+    if column_delimiter == "Unicode":
+        column_delimiter = "\024"
+    elif len(column_delimiter) > 1:
+        print "No valid column delimiter character given."
+        return False
+
+    global lines_to_process
+    lines_to_process = config['TASK']['LinesToProcess']
+
+    if lines_to_process in ("None", ""):
+        lines_to_process = 0
+    else:
+        lines_to_process = int(lines_to_process)
+
+    global file_date_for_post_processing
+    file_date_for_post_processing = config['TASK']['FileDateForPostProcess']
+
+    if file_date_for_post_processing in ("None", ""):
+        file_date_for_post_processing = file_base_name_ending[1:-4]
+
+    global do_parse_task
+    do_parse_task = config['TASK']['ParseTask']
+
+    if do_parse_task in ("True", "False"):
+        do_parse_task = bool(do_parse_task)
+    else:
+        do_parse_task = True
+
+    global do_post_process_task
+    do_post_process_task = config['TASK']['PostProcessTask']
+
+    if do_post_process_task in ("True", "False"):
+        do_post_process_task = bool(do_parse_task)
+    else:
+        do_post_process_task = False
+
+    return True
+
+
+# PROGRAM LOGIC
 def main():
-    import_ripe_registry_data()
-    post_process_ripe_registry_data()
+    ready = setup()
 
-    return
+    if not ready:
+        return
+
+    if do_parse_task:
+        import_ripe_registry_data()
+
+    if do_post_process_task:
+        if os.path.exists(output_directory + file_base_name_output + "_" + file_date_for_post_processing + ".txt"):
+            post_process_ripe_registry_data()
+        else:
+            print "Specified file to be post-processed does not exist."
 
 
 if __name__ == '__main__':

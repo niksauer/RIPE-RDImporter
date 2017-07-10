@@ -1,4 +1,4 @@
-# *RIPE-RDImporter*
+# RIPE-RDImporter
 **R**éseaux **IP** **E**uropéens **R**egistry **D**ata **I**mport tool. 
 
 Provided that you have downloaded [RIPE]'s DB snapshots of [INETNUM] and [ORGANIZATION] entities, representing individual CIDR networks and owning organizations respectively, this tool will scan a specified number of lines for networks, parse its accompaning information and build a complete record including referential organization data.
@@ -80,6 +80,7 @@ python RDImporter.py
 **Note:** Always scans a specified number of lines from the beginning of an INETNUM file.
 
 3. Post-proces parsed data
+
 **Note:** Removes records not managed by RIPE, including special purpose networks.
 
 ## Output

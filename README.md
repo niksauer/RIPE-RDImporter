@@ -1,6 +1,8 @@
 # *RIPE-RDImporter*
 **R**éseaux **IP** **E**uropéens **R**egistry **D**ata **I**mport tool.
 
+### Sample Output
+
 ## Contents
 1. [Dependencies & Installation](#dependencies--installation)
 2. [Configuration](#configuration)
@@ -74,16 +76,72 @@ Each line-break seperated record in the produced output file consists of the fol
 |org_type     |String                 |No         |`LIR`                              |
 |org_name     |String                 |No         |`Telefonaktiebolaget L M Ericsson` |
 
-## *Vertica Import & Analysis*
-Create corresponding table via VSQL DDL:
+## Vertica Import & Analysis
+#### Create corresponding table via DDL:
 ```
+DROP TABLE IF EXISTS ripe_registry_data CASCADE;
+CREATE TABLE ripe_registry_data (
+	"country_code" varchar(10),
+	"org_code" varchar (100),
+	"start_ip" integer PRIMARY KEY,
+	"end_ip" integer NOT NULL,
+	"ip_prefix" varchar (100),
+	"descr" varchar(100),
+	"netname" varchar(100),
+	"org_type" varchar(100),
+	"org_name" varchar(100)
+	-- "asn" varchar(100),
+	-- "as_descr" varchar(100)
+);
 ```
 
-Import produced output files via VSQL COPY DIRECT: 
+#### Import produced output files via COPY DIRECT: 
 ```
+COPY ripe_registry_data (
+	country_code,
+	org_code,
+	orginal_start_ip FILLER VARCHAR,
+	original_end_ip FILLER VARCHAR,
+	start_ip as INET_ATON(orginal_start_ip),
+	end_ip as INET_ATON(original_end_ip),
+	ip_prefix,
+	descr,
+	netname,
+	org_type,
+	org_name
+	-- asn,
+	-- as_descr
+)
+FROM LOCAL '../Parsed-RIPE-Data/ripe_registry_post_6_27_2017.txt'
+DELIMITER E'\024'
+NULL 'NULL'
+REJECTED DATA 'error/ripe_rejected_ips.txt'
+EXCEPTIONS 'error/ripe_exceptions.txt'
+DIRECT;
 ```
 
-Retrieve IPv4 percentage covered by imported data:
+**Note:** Adjust delimiter to match the configured column delimiter.
+
+#### Retrieve percentage of IPv4 address space covered by imported data:
 ```
+SELECT ((sum((end_ip+1)-start_ip))/(4*1024*1024*1024))*100.0 as coverage_percentage
+FROM ripe_registry_data
+WHERE org_type = '"LIR"';
 ```
 
+**Note:** Predicate `WHERE org_type = 'LIR'` is necessary to combat overlapping data (comp. [Sample Output](#sample-output)). For exact coverage, subtract number of special purpose IPs from total IP count (2^32):
+
+```
+SELECT ((sum((end_ip+1)-start_ip))/(4*1024*1024*1024-(
+	2*(1024*1024*256)+
+	3*(1024*1024*16)+
+	1*(1024*1024*4)+
+	1*(1024*1024)+
+	1*(1024*32)+
+	2*(1024*64)+
+	5*(256)+
+	1
+)))*100.0 as coverage_percentage
+FROM ripe_registry_data
+WHERE org_type = '"LIR"';
+```

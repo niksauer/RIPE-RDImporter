@@ -61,15 +61,15 @@ python RDImporter.py
 2. Parse task
 3. Post-process task
 
-## *Output*
-Each line-break seperated record in the produced output file consists of the following fields:
+## Output
+Each line-break `'\n'` seperated record in the produced output file consists of the following fields:
 
 |Field        |Format                 |Guaranteed |Example                            |
-|------       |----                   |:------:   |----                               |
-|country_code |ISO3166-1              |No         |`DK`                               |
-|org_code     |String                 |No         |`ORG-EA44-RIPE`                    |
-|start_ip     |Dotted Decimal Notation|Yes        |`213.159.160.0`                    |
-|end_ip       |Dotted Decimal Notation|Yes        |`213.159.191.255`                  |
+|------       |----                   |:------:	  |----                               |
+|country_code |ISO3166-1              |No	  |`DK`                               |
+|org_code     |String                 |No	  |`ORG-EA44-RIPE`                    |
+|start_ip     |Dotted Decimal Notation|Yes 	  |`213.159.160.0`                    |
+|end_ip       |Dotted Decimal Notation|Yes	  |`213.159.191.255`                  |
 |ip_prefix    |CIDR Notation          |Yes        |`213.159.160.0/19`                 |
 |descr        |String                 |No         |`NULL`                             |
 |netname      |String                 |No         |`SE-ERICSSON-20010504`             |

@@ -1,7 +1,24 @@
 # *RIPE-RDImporter*
-**R**éseaux **IP** **E**uropéens **R**egistry **D**ata **I**mport tool.
+**R**éseaux **IP** **E**uropéens **R**egistry **D**ata **I**mport tool. 
+
+Provided that you have downloaded [RIPE]'s DB snapshots of [INETNUM] and [ORGANIZATION] entities, representing individual CIDR networks and owning organizations respectively, this tool will scan a specified number of lines for networks, parse its accompaning information and build a complete record including referential organization data.
+
+[RIPE]: https://www.ripe.net
+[INETNUM]: http://ftp.ripe.net/split/ripe.db.inetnum.gz
+[ORGANIZATION]: http://ftp.ripe.net/split/ripe.db.organisation.gz
 
 ### Sample Output
+```
+...
+SA; ORG-SSTC1-RIPE; 39321600; 39583743; 2.88.0.0/14; NULL; "SA-STC-20100517"; "LIR"; "Saudi Telecom Company JSC"
+...
+SA; NULL; 39490816; 39501823; 2.90.149.0/24; "DSL customers"; "SAUDINET_DSL"; NULL; NULL
+SA; NULL; 39501824; 39518207; 2.90.192.0/18; "SaudiNet DSL pool_Dynamic IPs"; "SAUDINET_DSL_POOL"; NULL; NULL 
+...
+RU; ORG-CTaM1-RIPE; 39583744; 39845887; 2.92.0.0/14; NULL; "RU-CORBINA-20100521"; "LIR"; "OJSC "Vimpelcom""
+RU; NULL; 39714816; 39845887; 2.94.0.0/15; "Dynamic IP Pool for Broadband Customers"; "BEELINE-BROADBAND"; NULL; NULL
+...
+```
 
 ## Contents
 1. [Dependencies & Installation](#dependencies--installation)
@@ -44,22 +61,26 @@ All options are set via **config.ini** and validated upon program start. Errors 
 <sup>3</sup> Trailing slash will be appended if missing. **Note:** Follows path from project root.
 
 ### Output Settings
-|Option                     |Type   |Required |Format                 |Example/Default                            |
-|------                     |----   |:------: |------                 |------                                     |
-|FileBaseRegistryData       |String |No       |-                      |`ripe.db`                                  |
-|FileBaseOutput             |String |No       |-                      |`ripe_registry_data`                       |
-|FileBaseFailedLookup       |String |No       |-                      |`ripe_registry_failed_organisation_lookups`|
-|FileBaseExceptions         |String |No       |-                      |`ripe_registry_exceptions`                 |
+|Option                     |Type   |Required |Example/Default                            |
+|------                     |----   |:------: |------                                     |
+|FileBaseRegistryData       |String |No       |`ripe.db`                                  |
+|FileBaseOutput             |String |No       |`ripe_registry_data`                       |
+|FileBaseFailedLookup       |String |No       |`ripe_registry_failed_organisation_lookups`|
+|FileBaseExceptions         |String |No       |`ripe_registry_exceptions`                 |
 
-## *Execution*
+## Execution
 ```
 cd RIPE-RDImporter/
 python RDImporter.py
 ```
 
-1. Loading of settings
-2. Parse task
-3. Post-process task
+1. Load settings
+2. Parse + output registry data
+
+**Note:** Always scans a specified number of lines from the beginning of an INETNUM file.
+
+3. Post-proces parsed data
+**Note:** Removes records not managed by RIPE, including special purpose networks.
 
 ## Output
 Each line-break `'\n'` seperated record in the produced output file consists of the following fields:

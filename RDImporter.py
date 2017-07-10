@@ -236,7 +236,7 @@ def evaluate_inetnum_object(inetnum_object, failed_organisation_lookup_write_que
     split_range = split_ip_range(inetnum_object['inetnum'])
     start_ip = split_range[0]
     end_ip = split_range[1]
-    ip_prefix = convert_to_ip_prefix(inetnum_object['inetnum'])
+    ip_prefix = str(netaddr.iprange_to_cidrs(start_ip, end_ip)[0])
 
     if is_special_purpose_network(ipcalc.Network(ip_prefix)) or is_known_ip_exception(ipcalc.IP(start_ip)):
         exceptions_write_queue.put(ip_prefix)
@@ -268,15 +268,6 @@ def evaluate_inetnum_object(inetnum_object, failed_organisation_lookup_write_que
 
         temp_record = temp_record + org_values + route_values
         return temp_record[:-1] + "\n"
-
-
-# -- HELPERS -- #
-# String -> String
-def convert_to_ip_prefix(ip_range):
-    ips = ip_range.split("-")
-    start_ip = ips[0].strip()
-    end_ip = ips[1].strip()
-    return str(netaddr.iprange_to_cidrs(start_ip, end_ip)[0])
 
 
 # String -> (String, String)

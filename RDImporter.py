@@ -1,6 +1,5 @@
 from itertools import islice
 import datetime
-
 import configparser
 import ipcalc
 import netaddr
@@ -222,8 +221,10 @@ def get_inetnum_object(record):
 
             if line.startswith(target):
                 attribute_value = line[len(target):].strip()
-                temp_object[target_attribute] = attribute_value
-
+                if temp_object[target_attribute] is None:
+                    temp_object[target_attribute] = attribute_value
+                else:
+                    temp_object[target_attribute] = temp_object[target_attribute] + " " + attribute_value
     return temp_object
 
 
@@ -291,8 +292,8 @@ def get_organisation_info(org):
     object_count = -1
     temp_object = get_empty_organisation_object()
     filename = registry_data_directory + file_base_name_registry_data + ".organisation"
-    with open(filename, 'r') as f:
-        for line in f:
+    with open(filename, 'r') as src_fp:
+        for line in src_fp:
             if line.__contains__(org):
                 next_line = line.strip()
 
@@ -310,7 +311,7 @@ def get_organisation_info(org):
                             attribute_value = next_line[len(target):].strip()
                             temp_object[target_attribute] = attribute_value
 
-                    next_line = f.next().strip()
+                    next_line = src_fp.next().strip()
 
 
 # -- CONCURRENT MULTI-PROCESSED DATA IMPORT -- #
